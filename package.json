@@ -1,0 +1,37 @@
+{
+  "name": "config",
+  "version": "1.0.0",
+  "description": "",
+  "main": "nodemon server.js",
+  "dependencies": {
+    "connect": "^3.7.0",
+    "esl": "^10.0.0",
+    "express": "^4.17.1",
+    "forever": "^2.0.0",
+    "geoip-lite": "^1.4.2",
+    "modesl": "^1.2.1",
+    "mysql": "^2.18.1",
+    "mysql2": "^2.1.0",
+    "nodemon": "^2.0.2",
+    "util": "^0.12.5",
+    "winston": "^3.2.1",
+    "xml": "^1.0.1",
+    "xml-formatter": "^1.2.0",
+    "xml-writer": "^1.7.0",
+    "xml2js": "^0.4.23"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.2"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "nodemon server.js"
+  },
+  "nodemonConfig": {
+    "watch": [
+      "server"
+    ]
+  },
+  "author": "",
+  "license": "ISC"
+}

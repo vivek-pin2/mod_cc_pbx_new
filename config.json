@@ -1,0 +1,24 @@
+{
+    
+        "mysqlinfo": { 
+            "host": "127.0.0.1",
+            "user":"ccuser",
+            "password":"cloudVirAmiNag119",
+            "port":3306,
+            "database":"cc_master"
+            },
+     
+        "server": {
+            "nodeport": 9002,
+            "ip":"127.0.0.1",
+	        "opsip_ip_port":"103.127.30.5:5070"
+
+        },
+        "xml":{
+            "user_context":"cc_pbx",
+	    "user_context_test":"recording"
+
+        }
+        }
+
+
