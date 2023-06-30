@@ -13,7 +13,6 @@ from mysql.connector import Error
 from mysql.connector import Error
 from mysql.connector.connection import MySQLConnection
 from mysql.connector import pooling
-import threading
 import schedule
 import time
 import datetime
@@ -37,7 +36,7 @@ logger = logging.getLogger()
 logger.addHandler(handler)
 logger.setLevel(logging.INFO)
 
-with open('config.json') as config:
+with open('/var/www/html/fs_backend/config.json') as config:
     data = json.load(config)
 #119.18.55.154
 # import queue
@@ -95,6 +94,7 @@ class MyThread(threading.Thread):
 
 
 def process_queue():
+    
     while True:
         try:
             x = my_queue.get(block=False)
@@ -124,25 +124,20 @@ def get_server_details():
 
 
 def create_event(e):
-     pass
-  
-def event_bridge(e):
-    #print(f"total_balance {str(e.getHeader(str('variable_total_balance')))}")
-
     pass
-
-    
+     
+  
 
 
 def event_answer(e):
     did_sell_rate = {str(e.getHeader(str('variable_did_sell_rate')))}
     application= str(e.getHeader(str("variable_application")))
     call_type=str(e.getHeader(str('variable_call_type')))
-
-    #print(f"answer function called time {current_time} call_type {call_type}   did_sell_rate {did_sell_rate} type_call {type_call} application {application} \n ")
+   
+    print(f"answer function called time {current_time}   call_type {call_type}   did_sell_rate {did_sell_rate} type_call {type_call} application {application} \n ")
    
     call_data = {'server_details': str(e.getHeader(str("FreeSWITCH-IPv4")))}
-    call_data['customer_id'] = str(e.getHeader(str("variable_cust_id")))
+    call_data['customer_id'] = str(e.getHeader(str("variable_cust_id"))) 
     call_data['core_uuid'] = str(e.getHeader(str("Channel-Call-UUID")))
     call_data['server_details'] = str(e.getHeader(str("FreeSWITCH-IPv4")))
     call_data['talking_mnt'] = str(e.getHeader(str("variable_talking_mnt")))
@@ -164,7 +159,6 @@ def event_answer(e):
     call_data['did_connect_charge'] = str(e.getHeader(str('variable_did_connect_charge')))
     call_data['did_billing_type'] = str(e.getHeader(str("variable_did_billing_type")))
     call_data['caller']=str(e.getHeader(str('Caller-Caller-ID-Number')))
-    call_data['server_details'] = str(e.getHeader(str("FreeSWITCH-IPv4")))
     call_data['custom_hangup'] = str(e.getHeader(str('variable_custom_hangup')))
 
     
@@ -181,7 +175,6 @@ def event_answer(e):
         if call_data['is_mnt_plan'] == 'None':
             call_data['is_mnt_plan'] = call_data['is_grp_mnt_plan']
             call_data['talking_mnt'] = call_data['talking_grp_mnt']
-            #print(f"swap grp mnt{call_data['is_mnt_plan']} talking_group_mnt----->{call_data['talking_mnt']}")
         
         #print(f"is_mnt_plan --->{call_data['is_mnt_plan']}  billng_type --{call_data['billing_type']}   did_billng_type-->{call_data['did_billing_type']} did_connect_charge --{call_data['did_connect_charge']}")
         #print(e.serialize())
@@ -195,7 +188,7 @@ def event_answer(e):
                     call_data['dial_prefix'], call_data['sell_rate'], call_data['buy_rate'],
                     call_data['selling_min_duration'], call_data['selling_billing_block'],call_data['caller'],call_data['did_connect_charge'],call_data['did_billing_type'])
         profile_info(real_time_data, 'insert', None)
-            # if int(call_data['talking_mnt']) >= 1 and call_data['is_mnt_plan'] == '1':
+
         if call_data['is_mnt_plan'] == '1':
          if call_data['call_type'] == 'outbound' or call_data['application'] == 'outbound':
                 get_call = "select (select count(1) from pbx_real_time_billing) as calls,uuid,call_type," \
@@ -241,7 +234,8 @@ def event_answer(e):
 
 
     elif   did_sell_rate != "None"  and  application =="inbound"  :
-
+        
+    
         real_time_data = "insert into  pbx_real_time_billing (uuid,customer_id,billing_type,server_details," \
                          "call_type,call_application,destination,sell_rate,buy_rate,selling_min_duration," \
                          "selling_billing_block,caller,did_connect_charge,did_billing_type) values (\"{0}\",\"{1}\",\"{2}\",\"{3}\",\"{4}\",\"{5}\",\"{6}\"" \
@@ -250,15 +244,74 @@ def event_answer(e):
                     call_data['server_details'], call_data['call_type'], call_data['application'],
                     call_data['dial_prefix'], call_data['sell_rate'], call_data['buy_rate'],
                     call_data['selling_min_duration'], call_data['selling_billing_block'],call_data['caller'],call_data['did_connect_charge'],call_data['did_billing_type'])
+        
         profile_info(real_time_data, 'insert', None)
+        print("insert inbound did call ")
 
           
         deduct_balance(e, call_data, 0)
      
 
+def event_bridge(e):
+    
+    
+    call_type=str(e.getHeader(str('variable_call_type')))
+    tc_mnt=e.getHeader(str('variable_tc_mnt'))
+    tc_mnt_id=str(e.getHeader(str('variable_tc_mnt_id')))
+    core_uuid=  str(e.getHeader(str("Channel-Call-UUID")))
+    is_auth=  str(e.getHeader(str("variable_is_auth_tc")))
+    print(f"call_type {call_type} tc_mnt {(tc_mnt)}")
+    if call_type == "call_tc" and tc_mnt is not None:
+     tc_mnt =  int(tc_mnt)*60 
+     print(f"tc_mnt_id {tc_mnt_id} core_uuid {core_uuid}") 
+     
+     shed_hangup(core_uuid,tc_mnt-5, "127.0.0.1")
+
+    else:
+       pass
+            
+             
+
+
+def uuid_broadcast(con,uuid,mnt,ann_time):
+              from gtts import gTTS
+              
+              ann_sec= (int(ann_time)*60)
+              if (ann_sec< int(mnt)):
+             
+                ann_mnt= mnt - ann_sec
+              else:
+                 ann_mnt=ann_sec = int(int(mnt)/2)
+              
+              #print(f"mnt {mnt} ann_sec {ann_sec}ann_mnt {ann_mnt}")
+              mytext = f'Low balance Your call will disconnected after {ann_sec} seconds'
+              tts_file = gTTS(text=mytext, lang='en', slow=False)
+               
+              tc_file = f"/var/www/html/fs_backend/upload/{(e.getHeader(str('variable_cust_id')))}/{uuid}.mp3"
+              e.addHeader("tc_file",tc_file )
+              #print("tc_file",tc_file)
+              tts_file.save(f"{tc_file}")
+              time.sleep(ann_mnt)
+              cmd =f"uuid_broadcast {uuid}  {tc_file}  aleg"
+              con.bgapi(cmd)
+              print(" uuid_broadcast ann_mnt ",cmd)
+              
+              
+
+             
+  
+
+
+    
+    
+
+    
+              
+             
+   
 
 def event_hangup(e):
-    #print(e.serialize())
+    variable_cc_cause =  str(e.getHeader(str('variable_cc_cause')))
 
     call_hangup_dtl = {'core_uuid': str(e.getHeader(str("Channel-Call-UUID"))),
                            'bridge_time': str(e.getHeader(str("Caller-Channel-Answered-Time"))),
@@ -288,25 +341,18 @@ def event_hangup(e):
                            'did_connect_charge': str(e.getHeader(str('variable_did_connect_charge'))),
                            'caller': str(e.getHeader(str('Caller-Caller-ID-Number'))),
                            'cust_id': str(e.getHeader(str('variable_cust_id'))),
-                           'custom_hangup': str(e.getHeader(str('variable_custom_hangup'))),
+                           'custom_hangup': str(e.getHeader(str('variable_custom_hangup')))
     }  
     
     dlt_call = "delete from pbx_real_time_billing where uuid=\"{0}\"".format(call_hangup_dtl['core_uuid'])
     profile_info(dlt_call, 'insert', None)
 
-    #print(f"application   {call_hangup_dtl['application']}  call_type- {call_hangup_dtl['call_type'] }   type_call {type_call}  custom_hangup {call_hangup_dtl['custom_hangup']}  ")
     if (type_call == "inbound" or type_call == "outbound") and call_hangup_dtl['application'] =="outbound":
-     
-    
-        '''print(f" is_mnt_plan --->{call_hangup_dtl['is_mnt_plan']}  is_grp_mnt_plan -->{call_hangup_dtl['is_grp_mnt_plan']} caller -->{call_hangup_dtl['caller']}\
-              \n  did_billing_type {call_hangup_dtl['did_billing_type']} did_connect_charge {call_hangup_dtl['did_connect_charge']}") '''
-
-
+        
         if int(call_hangup_dtl['bridge_time']) != 0 and call_hangup_dtl['talking_mnt'] != '0':
 
-
             if call_hangup_dtl['is_mnt_plan'] == '1':
-               # print(f"update minute plan  bridge_time {int(call_hangup_dtl['bridge_time']) }")
+                print(f"update minute plan ")
                 billing_time=did_deduct_mnt(call_hangup_dtl['hangup_time'] ,call_hangup_dtl['bridge_time'],call_hangup_dtl['did_connect_charge'],call_hangup_dtl['did_billing_type'])
                 
                 if call_hangup_dtl['call_type'] == "click2call":
@@ -319,17 +365,18 @@ def event_hangup(e):
                 update_mnt = "UPDATE pbx_call_plan_rates SET used_minutes = used_minutes+\"{0}\" WHERE id = \"{1}\"" \
                     .format(billing_time, call_hangup_dtl['call_plan_rate_mnt_id'])
                 profile_info(update_mnt, 'insert', None)
-         
 
 
-            if call_hangup_dtl['is_mnt_plan'] == 'None':
-                call_hangup_dtl['is_mnt_plan'] = call_hangup_dtl['is_grp_mnt_plan']
-                
+                if  (e.getHeader(str('variable_is_ext_minute'))):
+                 print("Extension  mnt id",(e.getHeader(str('variable_ext_mnt_id'))))
+                 update_mnt = f"UPDATE pbx_min_ext_mapping SET  used_minutes = used_minutes + {billing_time} where ext_mnt_id= {(e.getHeader(str('variable_ext_mnt_id')))}"
+                 profile_info(update_mnt, 'insert', None) 
+
 
 
             if call_hangup_dtl['is_grp_mnt_plan'] == '1':
 
-                #print(f'update group plan ***{call_hangup_dtl["core_uuid"]} \n')
+                print(f'update group plan ***{call_hangup_dtl["core_uuid"]} \n')
                 billing_time=did_deduct_mnt(call_hangup_dtl['hangup_time'] ,call_hangup_dtl['bridge_time'],call_hangup_dtl['did_connect_charge'],call_hangup_dtl['did_billing_type'])
                 
                 if call_hangup_dtl['call_type'] == "click2call":
@@ -342,6 +389,8 @@ def event_hangup(e):
                 update_mnt = "UPDATE pbx_call_rate_group SET used_minutes = used_minutes+\"{0}\" WHERE id = \"{1}\"" \
                     .format(billing_time, call_hangup_dtl['group_id'])
                 profile_info(update_mnt, 'insert', None)
+
+          
 
 
             get_call = "select (select count(1) from pbx_real_time_billing) as calls,uuid,call_type,call_application," \
@@ -377,36 +426,73 @@ def event_hangup(e):
             query="update customer set balance=balance-\"{0}\" where id=\"{1}\"".format(str(call_blnce),call_hangup_dtl['customer_id'])
             profile_info(query, 'insert', None)
             profile_info(update_session_bill, 'insert', None)
-
-            
             #print(f"call blance -->{call_blnce} total_balance -->{call_hangup_dtl['total_balance']}")
             deduct_balance(e, call_hangup_dtl, 1)
             print("hangup_event function")
  
 
+
     if  str(e.getHeader(str('variable_did_connect_charge'))) != "None" and  type_call =="inbound"  and call_hangup_dtl['application'] =="inbound":  
-           
-            #print(f"hangup_time {int(call_hangup_dtl['hangup_time'])}  bridge_time  {int(call_hangup_dtl['bridge_time'])}")  
-            if int(call_hangup_dtl['bridge_time']) != 0 :
+
+            print(f"INBOUND call_type {call_hangup_dtl['call_type']} ")  
+            
+
+            if int(call_hangup_dtl['bridge_time']) != 0  and call_hangup_dtl['call_type'] !="call_tc":
              billing_time = ((int(call_hangup_dtl['hangup_time']) - int(call_hangup_dtl['bridge_time'])) / 1000000)
-             #print(f"INBOUND DID deduction  { str(e.getHeader(str('variable_did_connect_charge')))} billing_time  {billing_time} call_type {str(e.getHeader(str('variable_call_type')))}")  
 
              call_blnce = did_deduct_outbound(call_hangup_dtl['sell_rate'], call_hangup_dtl['did_connect_charge'] ,billing_time,call_hangup_dtl['did_billing_type'])
-             print(f"call_blnce  --------->>>>>{call_blnce}  billing_time--> {billing_time } total bal {call_hangup_dtl['total_balance'] }")
-
+             print(f"call_blnce  --------->>>>>{call_blnce}  billing_time--> {billing_time } total bal {call_hangup_dtl['total_balance']} {call_hangup_dtl['call_type']}  ")
+            
              if float(call_hangup_dtl['total_balance']) < (call_blnce) and billing_time <0.5:
                call_blnce = 0
-
-             
              update_session_bill="update pbx_realtime_cdr set sessionbill= \"{0}\" ,bridge_time= \"{2}\"  where uuid=\"{1}\"".format(str(call_blnce),call_hangup_dtl['core_uuid'],billing_time)
              profile_info(update_session_bill, 'insert', None)
              query="update customer set balance=balance-\"{0}\" where id=\"{1}\"".format(str(call_blnce),call_hangup_dtl['customer_id'])
              profile_info(query, 'insert', None)
-             #print(f"call blance -->{call_blnce} total_balance -->{call_hangup_dtl['total_balance']}")
+
+    
+    if call_hangup_dtl['call_type'] =="call_tc" and variable_cc_cause =="answered":
+         tc_min_id=str(e.getHeader(str('variable_tc_mnt_id')))
+         cust_id=str(e.getHeader(str('variable_cust_id')))
+         is_auth_tc=str(e.getHeader(str('variable_is_auth_tc')))
+         
+
+         if int(call_hangup_dtl['bridge_time']) != 0 :
+             billing_time = ((int(call_hangup_dtl['hangup_time']) - int(call_hangup_dtl['bridge_time'])) / 1000000)
+             total_time_tc = billing_time - (int(e.getHeader('variable_cc_queue_answered_epoch')) - int(e.getHeader(('variable_cc_queue_joined_epoch'))))
+            
+             print(f"tele-consultant   queue_answed tc_min_id {tc_min_id}   billing_time {billing_time}  total_time_tc {total_time_tc}")
+             mnt_used =  math.ceil(total_time_tc / 60)
+             
+             print(f"T-C is_auth_tc {is_auth_tc} mnt_used {mnt_used}  cust_id {cust_id}  ")
+
+             if  is_auth_tc == "1":
+                query="UPDATE  `pbx_min_tc_mapping` set used_minute=used_minute+\"{0}\"  WHERE tc_min_id =\"{1}\" ".format(mnt_used,tc_min_id)
+                print(query)
+                profile_info(query, 'insert', None) 
+
+             elif is_auth_tc == "0":
+                query="UPDATE  `pbx_tc_unauth_call` set used_minutes=\"{0}\" ,end_time = CURRENT_TIMESTAMP() WHERE id =\"{1}\" ".format(mnt_used,tc_min_id)
+                profile_info(query, 'insert', None) 
+             
+         update_mnt_cdr = "UPDATE pbx_realtime_cdr SET used_minutes = '{0}', bridge_time ='{2}', customer_id ='{3}' WHERE uuid = '{1}'" .format(mnt_used,call_hangup_dtl['core_uuid'],total_time_tc,cust_id)
+         profile_info(update_mnt_cdr, 'insert', None) 
 
 
-            """   deduct_balance_inbound(e, call_hangup_dtl, 1)
-            print("hangup_event function") """
+         try:
+            if  is_auth_tc == "1":
+             tc_per_uuid = f"/var/www/html/fs_backend/upload/{cust_id}/{call_hangup_dtl['core_uuid']}.mp3"
+             #print(f"tc_file_per uuid {tc_per_uuid}")      
+             os.remove(tc_per_uuid)
+            else:
+               pass 
+         except OSError :
+             print("Error: %s - %s" % (OSError, tc_per_uuid))  
+        
+              
+                
+
+           
             
 
 
@@ -425,7 +511,25 @@ def shed_hangup(uuid, minute, ip_details):
          print("uuid_kill %s allotted_timeout"%(uuid))   
          conn.execute("uuid_kill %s allotted_timeout"%(uuid)) 
         else:
+         call_type =e.getHeader(str("variable_call_type"))
+         print("sched_hangup %s allotted_timeout %s"%(str(minute),uuid))  
          conn.execute("sched_hangup", "+" + str(minute) + "allotted_timeout", uuid)
+
+         print("call_type %s "%(call_type))  
+         if call_type =="call_tc":
+          is_auth_tc =e.getHeader(str("variable_is_auth_tc"))
+          ann_time =e.getHeader(str("variable_ann_time"))
+          print("ann_time",ann_time)
+
+          if  is_auth_tc == "1" and int(ann_time) >0:
+
+           print("uuid broadcast announcement time ",ann_time)  
+           fd = threading.Thread(target=uuid_broadcast(conn,uuid,minute,ann_time))
+           fd.start()
+          else:
+             pass
+         
+         
         conn.disconnect() 
 
     
@@ -475,23 +579,15 @@ def call_deduct_mnt_outbound(call_data, live_call, i):
                 print(live_call[row]['uuid'], mnt, live_call[row]['server_details'])
                 print('\n', "next", '\n')
                 shed_hangup(live_call[row]['uuid'], mnt, live_call[row]['server_details'])
-                #print(type(live_call[row]['uuid']), type(rest_mnt), type(live_call[row]['server_details']))
-                # rest_mnt_test-=1
+
         elif rest_mnt <= 0:  
 
             conn = ESLconnection(call_data['server_details'], '8002', 'ClueCon')  
             if conn.connected():
                print("Connected to freeswitch 2 ")
 
-               """  cmd =f"uuid_broadcast {call_data['core_uuid']}  /var/www/html/fs_backend/upload/def_prompts/ip_blocked.wav aleg" """
                print(f"No available minute rest_mnt {rest_mnt}  uuid {call_data['core_uuid']}  custom_hangup { str(e.getHeader('variable_custom_hangup'))}")
                conn.execute("sched_hangup", "+0 1006",call_data['core_uuid'])
-
-               #con.execute("answer", "", call_data['core_uuid'])
-               #con.execute("playback", "", call_data['core_uuid'])
-               #con.bgapi(fedbck_strng + " &playback(/var/www/html/fs_backend/upload/def_prompts/ip_blocked.wav" + str(fedbck[i][6]))
-
-               
                conn.disconnect()
 
 
@@ -509,6 +605,7 @@ def did_deduct_outbound(sell_rate,did_connect_chrg,bridge_time,did_bill_type):
 
 def deduct_balance(e, call_data, hangup_shed):
 
+    #print(e.serialize())
 
     if str(e.getHeader(str('variable_did_sell_rate'))) and  type_call =="inbound" and call_data['application'] == "inbound":
       get_call = "select (select count(1) from pbx_real_time_billing) as calls,uuid,call_type,caller," \
@@ -551,8 +648,13 @@ def deduct_balance(e, call_data, hangup_shed):
             else:
              used_mnt_2 =live_call[index-1]['start_time']  - live_call[index]['start_time']  
              sec = used_mnt_2.days * seconds_in_day + used_mnt_2.seconds
-            reset_sec.append((sec%live_call[index]['selling_billing_block']))
-            per_call_deduction = calc_dial_out_sec_to_charge(live_call[index]['sell_rate'],live_call[index]['selling_billing_block'], sec,live_call[index]['billing_type'],live_call[index]['did_connect_charge'])
+           
+            did_con_chrg = live_call[index].get(tuple(['did_connect_charge']))
+           
+            reset_sec.append(0) if did_con_chrg is None else  reset_sec.append(sec%did_con_chrg)
+           
+            print(did_con_chrg)
+            per_call_deduction = calc_dial_out_sec_to_charge(live_call[index]['sell_rate'],live_call[index]['selling_billing_block'], sec,live_call[index].get(tuple(['billing_type'])),live_call[index].get(tuple(['did_connect_charge'])))
             consume_balance = consume_balance + per_call_deduction
             total_sec = total_sec + sec
             print(f"per_call_deduction {per_call_deduction}, reset_sec {reset_sec}")
@@ -564,72 +666,23 @@ def deduct_balance(e, call_data, hangup_shed):
         for row in range(len(live_call)):
              i = calc_dial_out_sec(live_call[row]['sell_rate'], live_call[row]['selling_billing_block'],
                                    per_call_blance)
-             i=i+reset_sec[row] 
-             print("reset_sec",i)
-             if int(per_call_blance) < 0:
-                print(f"should hangup now  uuid {live_call[row]['uuid']} ")
-                shed_hangup(live_call[row]['uuid'],0, live_call[row]['server_details'])
-             else:  
-                shed_hangup(live_call[row]['uuid'], i, live_call[row]['server_details'])
-
-          
-""" 
-def deduct_balance_inbound(e, call_data, hangup_shed):
-    get_call = "select (select count(1) from pbx_real_time_billing) as calls,uuid,call_type,caller," \
-               "call_application,server_details ,start_time ,sell_rate,buy_rate,selling_min_duration," \
-               "selling_billing_block from pbx_real_time_billing where " \
-               "customer_id=\"{0}\" and  did_billing_type=\"{1}\"  " \
-        .format(call_data['customer_id'], call_data['did_billing_type'])
-
-    live_call = profile_info(get_call, 'select', None)
-    if len(live_call) == 1 and hangup_shed == 0:
-        i = calc_dial_out_sec(call_data['sell_rate'], call_data['selling_billing_block'], call_data['total_balance'])
-        print("caller who's on live_call ------->",live_call)
-        shed_hangup(call_data['core_uuid'], i, call_data['server_details'])
-
-    elif len(live_call) > 1 or (hangup_shed == 1 and len(live_call) > 0):
-        if hangup_shed==1:
-          start=0
-          reset_sec=[]
-        else:
-          start = 1
-          reset_sec=[0]
-        total_sec = 0
-        total_blance = 0
-        print(f"live_call --------------->{len(live_call)}  did_billing_type {call_data['did_billing_type']}")
-        #for index in range(start,len(live_call) - 1):
-        for index in range(start, live_call[0]['calls']):
-            used_mnt = datetime.datetime.now() - live_call[index]['start_time']
-            sec = used_mnt.days * seconds_in_day + used_mnt.seconds
-            reset_sec.append(int(live_call[index]['selling_billing_block'])-(sec%live_call[index]['selling_billing_block']))
-
-
-            blance = calc_dial_out_sec_to_charge(live_call[index]['sell_rate'],live_call[index]['selling_billing_block'], sec,live_call[index]['did_billing_type'],live_call[index]['did_connect_charge'])
-            print("reset sec",reset_sec)
-            total_blance = total_blance + blance
-            total_sec = total_sec + sec
-            print(f"total balance -->{total_blance} second-->{total_sec}")
-        reset_blance = float(call_data['total_balance']) - total_blance
-        per_call_blance = math.floor(reset_blance / live_call[0]['calls'])
-
-
-        for row in range(len(live_call)):
-             i = calc_dial_out_sec(live_call[row]['sell_rate'], live_call[row]['selling_billing_block'],
-                                   per_call_blance)
+             
              i=i+reset_sec[row] 
              if int(per_call_blance) < 0:
                 print(f"should hangup now  uuid {live_call[row]['uuid']} ")
                 shed_hangup(live_call[row]['uuid'],0, live_call[row]['server_details'])
              else:  
                 shed_hangup(live_call[row]['uuid'], i, live_call[row]['server_details'])
-  """      
 
-       
 
 
 def calc_dial_out_sec(sell_rate, billing_block, balance):
     #print(f"{float(balance)} / {float(sell_rate)}")
-    total_sec =math.floor(float(balance) / float(sell_rate))
+    if  sell_rate:
+     total_sec =math.floor(float(balance) / float(sell_rate))
+    else:
+     total_sec =math.floor(balance)
+
     total_sec=total_sec*int(billing_block)-1
     return total_sec
 
@@ -637,11 +690,14 @@ def calc_dial_out_sec(sell_rate, billing_block, balance):
 
 
 def calc_dial_out_sec_to_charge(sell_rate, selling_billing_block, bridge_time,did_bill_type,did_connect_chrg):
+   
+    print(sell_rate, selling_billing_block, bridge_time,did_bill_type,did_connect_chrg)
     if did_bill_type =='2' or did_bill_type =="4":
      per_call_deduction =  float(did_connect_chrg)
+
     else:    
       count = math.ceil(float(bridge_time) / int(selling_billing_block))
-      if did_connect_chrg != "None":
+      if did_connect_chrg !="None":
        per_call_deduction = count * float(sell_rate) +  float(did_connect_chrg)
       else:
        per_call_deduction = count * float(sell_rate)
@@ -667,7 +723,6 @@ def did_deduct_mnt(hangup_time,bridge_time,did_connect_chrg,did_billing_type):
          else:
           billing_time  = math.ceil(billing_time / 60)  
            
-
     #print(f" Minute billing_time-->{billing_time}")
     return billing_time 
 
